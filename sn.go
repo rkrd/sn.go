@@ -11,6 +11,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"errors"
 )
 
 type User struct {
@@ -65,7 +66,9 @@ func GetAuth(email string, pass string) (User, error) {
 	return user, err
 }
 
-func getNotes(user User, mark string) (Index) {
+func getNotes(user User, mark string) (Index, error) {
+	var i Index
+
 	v := url.Values{}
 	v.Add("auth", user.Auth)
 	v.Add("email", user.Email)
@@ -79,25 +82,28 @@ func getNotes(user User, mark string) (Index) {
 		panic(err)
 	}
 	if s.StatusCode != 200 {
-		panic(fmt.Sprintf("getNotes %d", s.StatusCode))
+		return i, errors.New(fmt.Sprintf("GetNote returned: %d", s.StatusCode))
 	}
 
 	d := json.NewDecoder(s.Body)
 
-	var i Index
 	err = d.Decode(&i)
 	if err != nil {
 		panic(err)
 	}
 
-	return i
+	return i, nil
 }
 
-func (user User) GetAllNotes() (Index) {
+func (user User) GetAllNotes() (Index, error) {
 	var i Index
 
 	for {
-		ii := getNotes(user, i.Mark)
+		ii , err := getNotes(user, i.Mark)
+
+		if err != nil {
+			return i, err
+		}
 
 		i.Mark = ii.Mark
 		i.Count += ii.Count
@@ -110,13 +116,14 @@ func (user User) GetAllNotes() (Index) {
 		}
 	}
 
-	return i
+	return i, nil
 }
 
-func (user User) GetNote(n *Note) Note {
-	fmt.Println("GetNote", n.Key)
+func (user User) GetNote(n *Note) (Note, error) {
+	var no Note
+
 	if len(n.Key) == 0 {
-		panic("Note has no Key set")
+		return no, errors.New("Note has no Key set")
 	}
 
 	v := url.Values{}
@@ -139,18 +146,17 @@ func (user User) GetNote(n *Note) Note {
 		panic(err)
 	}
 	if r.StatusCode != 200 {
-		panic(fmt.Sprintf("GetNote returned: %d", r.StatusCode))
+		return no, errors.New(fmt.Sprintf("GetNote returned: %d on note: %s", r.StatusCode, n.Key))
 	}
 
 	d := json.NewDecoder(r.Body)
-	var no Note
 	err = d.Decode(&no)
 
 	if err != nil {
 		panic(err)
 	}
 
-	return no
+	return no, nil
 }
 
 /* Used to update an existing note or create a new note if Key of Note is 
