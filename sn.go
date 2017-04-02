@@ -65,7 +65,7 @@ func GetAuth(email string, pass string) (User, error) {
 	return user, err
 }
 
-func getNotes(user User, mark string) ([]Note, string, error) {
+func getNotes(user User, mark string) (Index) {
 	v := url.Values{}
 	v.Add("auth", user.Auth)
 	v.Add("email", user.Email)
@@ -76,48 +76,59 @@ func getNotes(user User, mark string) ([]Note, string, error) {
 	s, err := http.Get(u.String())
 	defer s.Body.Close()
 	if err != nil {
-		return nil, "", err
+		panic(err)
+	}
+	if s.StatusCode != 200 {
+		panic(fmt.Sprintf("getNotes %d", s.StatusCode))
 	}
 
 	d := json.NewDecoder(s.Body)
 
-	var n Index
-	err = d.Decode(&n)
+	var i Index
+	err = d.Decode(&i)
+	if err != nil {
+		panic(err)
+	}
 
-	return n.Data, n.Mark, nil
+	return i
 }
 
-func GetAllNotes(user User) []Note {
-	var mark string
-	var notes []Note
+func (user User) GetAllNotes() (Index) {
+	var i Index
 
 	for {
-		d, m, err := getNotes(user, mark)
-		if err != nil {
-			panic(err)
-		}
+		ii := getNotes(user, i.Mark)
 
-		notes = append(notes, d...)
+		i.Mark = ii.Mark
+		i.Count += ii.Count
+		i.Time = ii.Time
+		i.Data = append(i.Data, ii.Data...)
 
-		if m == "" {
+		fmt.Printf("Marki %s Markii %s %d %d\n", i.Mark, ii.Mark, i.Count, ii.Count)
+		if ii.Mark == "" {
 			break
 		}
 	}
 
-	return notes
+	return i
 }
 
-func GetNote(user User, key string, version uint) Note {
+func (user User) GetNote(n *Note) Note {
+	fmt.Println("GetNote", n.Key)
+	if len(n.Key) == 0 {
+		panic("Note has no Key set")
+	}
+
 	v := url.Values{}
 	v.Add("auth", user.Auth)
 	v.Add("email", user.Email)
 
 	//https://app.simplenote.com/api2/data
 	var path string
-	if version != 0 {
-		path = fmt.Sprintf("api2/data/%s/%d", key, version)
+	if n.Version != 0 {
+		path = fmt.Sprintf("api2/data/%s/%d", n.Key, n.Version)
 	} else {
-		path = fmt.Sprintf("api2/data/%s", key)
+		path = fmt.Sprintf("api2/data/%s", n.Key)
 	}
 	u := url.URL{Scheme: "https", Host: "simple-note.appspot.com", Path: path}
 	u.RawQuery = v.Encode()
@@ -125,29 +136,33 @@ func GetNote(user User, key string, version uint) Note {
 	r, err := http.Get(u.String())
 	defer r.Body.Close()
 	if err != nil {
-		//return nil, "", err
 		panic(err)
+	}
+	if r.StatusCode != 200 {
+		panic(fmt.Sprintf("GetNote returned: %d", r.StatusCode))
 	}
 
 	d := json.NewDecoder(r.Body)
-	var n Note
-	err = d.Decode(&n)
+	var no Note
+	err = d.Decode(&no)
 
 	if err != nil {
 		panic(err)
 	}
 
-	return n
+	return no
 }
 
-func UpdateNote(user User, key string, note *Note) Note {
+/* Used to update an existing note or create a new note if Key of Note is 
+ * not set. */
+func (user User) UpdateNote(n *Note) Note {
 	v := url.Values{}
 	v.Add("auth", user.Auth)
 	v.Add("email", user.Email)
 
 	var path string
-	if key != "" {
-		path = fmt.Sprintf("api2/data/%s", key)
+	if n.Key != "" {
+		path = fmt.Sprintf("api2/data/%s", n.Key)
 	} else {
 		path = "api2/data"
 	}
@@ -155,7 +170,7 @@ func UpdateNote(user User, key string, note *Note) Note {
 	u.RawQuery = v.Encode()
 
 	b := new(bytes.Buffer)
-	json.NewEncoder(b).Encode(note)
+	json.NewEncoder(b).Encode(n)
 
 	r, err := http.Post(u.String(), "application/json; charset=utf-8", b)
 	if err != nil {
@@ -168,14 +183,14 @@ func UpdateNote(user User, key string, note *Note) Note {
 	}
 
 	d := json.NewDecoder(r.Body)
-	var n Note
+	var no Note
 	err = d.Decode(&n)
 
 	if err != nil {
 		panic(err)
 	}
 
-	return n
+	return no
 }
 
 func parse_unix(ts string) time.Time {
