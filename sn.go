@@ -146,7 +146,7 @@ func (user User) GetNote(n *Note) (Note, error) {
 		panic(err)
 	}
 	if r.StatusCode != 200 {
-		return no, errors.New(fmt.Sprintf("GetNote returned: %d on note: %s", r.StatusCode, n.Key))
+		return no, errors.New(fmt.Sprintf("GetNote returned: %d on note: %s URL: %s", r.StatusCode, n.Key, u.String()))
 	}
 
 	d := json.NewDecoder(r.Body)
