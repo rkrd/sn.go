@@ -119,11 +119,11 @@ func (user User) GetAllNotes() (Index, error) {
 	return i, nil
 }
 
-func (user User) GetNote(n *Note) (Note, error) {
+func (user User) GetNote(key string, version int) (Note, error) {
 	var no Note
 
-	if len(n.Key) == 0 {
-		return no, errors.New("Note has no Key set")
+	if len(key) == 0 {
+		return no, errors.New("Note has no key empty")
 	}
 
 	v := url.Values{}
@@ -132,10 +132,10 @@ func (user User) GetNote(n *Note) (Note, error) {
 
 	//https://app.simplenote.com/api2/data
 	var path string
-	if n.Version != 0 {
-		path = fmt.Sprintf("api2/data/%s/%d", n.Key, n.Version)
+	if version != 0 {
+		path = fmt.Sprintf("api2/data/%s/%d", key, version)
 	} else {
-		path = fmt.Sprintf("api2/data/%s", n.Key)
+		path = fmt.Sprintf("api2/data/%s", key)
 	}
 	u := url.URL{Scheme: "https", Host: "simple-note.appspot.com", Path: path}
 	u.RawQuery = v.Encode()
@@ -146,7 +146,7 @@ func (user User) GetNote(n *Note) (Note, error) {
 		panic(err)
 	}
 	if r.StatusCode != 200 {
-		return no, errors.New(fmt.Sprintf("GetNote returned: %d on note: %s URL: %s", r.StatusCode, n.Key, u.String()))
+		return no, errors.New(fmt.Sprintf("GetNote returned: %d on note: %s URL: %s", r.StatusCode, key, u.String()))
 	}
 
 	d := json.NewDecoder(r.Body)
