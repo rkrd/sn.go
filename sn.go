@@ -12,6 +12,8 @@ import (
 	"strings"
 	"time"
 	"errors"
+	"os"
+	// "path/filepath"
 )
 
 type User struct {
@@ -219,3 +221,70 @@ func make_unix(t time.Time) string {
 	return strconv.FormatFloat(ts, 'f', 6, 64)
 }
 
+func (n Note) update_note_fs() error {
+	new_file := false
+	if _, err := os.Stat("text.txt"); os.IsNotExist(err) {
+		new_file = true
+	}
+
+		
+	f, err := os.OpenFile("text.txt", os.O_RDWR|os.O_CREATE, 0755)
+	if err != nil {
+		panic(err) // change
+	}
+	defer f.Close()
+
+	fs, ferr := f.Stat()
+	if ferr != nil {
+		panic(ferr)
+	}
+	
+	mt := parse_unix(n.Modifydate)
+	if !new_file && fs.ModTime().After(mt) {
+		return errors.New("Filesystem note newer than current note.")
+	}
+
+	if _, err := f.WriteString(n.Content); err != nil {
+		panic(err)
+	}
+
+	if terr := os.Chtimes("text.txt", time.Now(), mt); terr != nil {
+		panic(terr)
+	}
+
+	return nil
+}
+
+func (ns Index) Create_fs(path string) error {
+	if _, err := os.Stat(path); os.IsNotExist(err) {
+		e := os.Mkdir(path, 0777)
+		if e != nil {
+			return e;
+		}
+	} else {
+		return errors.New("Could not create dir")
+	}
+
+	if err := os.Chdir(path); err != nil {
+		panic(err)
+	}
+	
+	for _, v := range ns.Data {
+		err := os.Mkdir(v.Key, 0777)
+		if err != nil {
+			panic(err)
+		}
+
+		if err := os.Chdir(v.Key); err != nil {
+			panic(err)
+		}
+
+		if err := v.update_note_fs(); err != nil {
+			panic(err)
+		}
+
+		os.Chdir(path)
+	}
+
+	return nil
+}
