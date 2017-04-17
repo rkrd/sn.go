@@ -4,15 +4,15 @@ import (
 	"bytes"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"net/http"
 	"net/url"
+	"os"
 	"strconv"
 	"strings"
 	"time"
-	"errors"
-	"os"
 	// "path/filepath"
 )
 
@@ -101,7 +101,7 @@ func (user User) GetAllNotes() (Index, error) {
 	var i Index
 
 	for {
-		ii , err := getNotes(user, i.Mark)
+		ii, err := getNotes(user, i.Mark)
 
 		if err != nil {
 			return i, err
@@ -161,7 +161,7 @@ func (user User) GetNote(key string, version int) (Note, error) {
 	return no, nil
 }
 
-/* Used to update an existing note or create a new note if Key of Note is 
+/* Used to update an existing note or create a new note if Key of Note is
  * not set. */
 func (user User) UpdateNote(n *Note) Note {
 	v := url.Values{}
@@ -221,13 +221,13 @@ func make_unix(t time.Time) string {
 	return strconv.FormatFloat(ts, 'f', 6, 64)
 }
 
-func (n Note) update_note_fs() error {
+/* Params fu - force update of note */
+func (n Note) update_note_fs(fu bool) error {
 	new_file := false
 	if _, err := os.Stat("text.txt"); os.IsNotExist(err) {
 		new_file = true
 	}
 
-		
 	f, err := os.OpenFile("text.txt", os.O_RDWR|os.O_CREATE, 0755)
 	if err != nil {
 		panic(err) // change
@@ -238,9 +238,9 @@ func (n Note) update_note_fs() error {
 	if ferr != nil {
 		panic(ferr)
 	}
-	
+
 	mt := parse_unix(n.Modifydate)
-	if !new_file && fs.ModTime().After(mt) {
+	if !new_file && fs.ModTime().After(mt) && !fu {
 		return errors.New("Filesystem note newer than current note.")
 	}
 
@@ -255,31 +255,37 @@ func (n Note) update_note_fs() error {
 	return nil
 }
 
-func (ns Index) Create_fs(path string) error {
+func (ns Index) WriteNotes(path string, overwrite bool) error {
 	if _, err := os.Stat(path); os.IsNotExist(err) {
 		e := os.Mkdir(path, 0777)
 		if e != nil {
-			return e;
+			panic(e)
 		}
 	} else {
-		return errors.New("Could not create dir")
+		if !overwrite {
+			return errors.New("Directory exists")
+		}
 	}
 
 	if err := os.Chdir(path); err != nil {
 		panic(err)
 	}
-	
+
 	for _, v := range ns.Data {
-		err := os.Mkdir(v.Key, 0777)
-		if err != nil {
-			panic(err)
+		if _, err := os.Stat(v.Key); os.IsNotExist(err) {
+			err := os.Mkdir(v.Key, 0777)
+			if err != nil {
+				panic(err)
+			}
+		} else if !overwrite {
+			continue
 		}
 
 		if err := os.Chdir(v.Key); err != nil {
 			panic(err)
 		}
 
-		if err := v.update_note_fs(); err != nil {
+		if err := v.update_note_fs(overwrite); err != nil {
 			panic(err)
 		}
 
