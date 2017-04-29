@@ -21,12 +21,24 @@ type User struct {
 	Auth  string
 }
 
+/*
+{"modifydate": "1493471435.803190"
+ "tags": ["Test_tag"]
+ "deleted": 0
+ "createdate": "1493471435.803190"
+ "systemtags": []
+ "version": 1
+ "syncnum": 1
+ "key": "3ba322992cdd11e7b405951ca8038d7c"
+ "minversion": 1}
+*/
+
 type Note struct {
 	Modifydate string   `json:"modifydate"`
 	Tags       []string `json:"tags"`
 	Deleted    int      `json:"deleted"`
 	CreateDate string   `json:"createdate"`
-	Systemtags []string `json:"systemtags"`
+	Systemtags []string `json:"systemtags,omitempty"`
 	Content    string   `json:"content,omitempty"`
 	Version    uint     `json:"version`
 	Syncnum    int      `json:"syncnum"`
@@ -154,6 +166,8 @@ func (user User) GetNote(key string, version int) (Note, error) {
 	d := json.NewDecoder(r.Body)
 	err = d.Decode(&no)
 
+	fmt.Println("debug")
+	fmt.Println(no)
 	if err != nil {
 		panic(err)
 	}
@@ -192,7 +206,9 @@ func (user User) UpdateNote(n *Note) Note {
 
 	d := json.NewDecoder(r.Body)
 	var no Note
-	err = d.Decode(&n)
+	err = d.Decode(&no)
+
+	fmt.Println(no.Key)
 
 	if err != nil {
 		panic(err)
@@ -226,6 +242,16 @@ func (n Note) update_note_fs(fu bool) error {
 	new_file := false
 	if _, err := os.Stat("text.txt"); os.IsNotExist(err) {
 		new_file = true
+		f, oe := os.OpenFile("Key", os.O_RDWR|os.O_CREATE, 0755)
+		if oe != nil {
+			panic(oe)
+		}
+
+		if _, err := f.WriteString(n.Key); err != nil {
+			panic(err)
+		}
+		f.Close()
+
 	}
 
 	f, err := os.OpenFile("text.txt", os.O_RDWR|os.O_CREATE, 0755)
@@ -247,6 +273,7 @@ func (n Note) update_note_fs(fu bool) error {
 	if _, err := f.WriteString(n.Content); err != nil {
 		panic(err)
 	}
+	f.Close()
 
 	if terr := os.Chtimes("text.txt", time.Now(), mt); terr != nil {
 		panic(terr)
