@@ -5,8 +5,8 @@ import (
 	//"github/sn.go"
 )
 
-func test_all() bool {
-	u, status := test1_get_auth("info@example.com", "foobar")
+func Test_all(email string, pass string) bool {
+	u, status := test1_get_auth(email, pass)
 	fmt.Println(u, status)
 	if !status {
 		return false
@@ -19,6 +19,29 @@ func test_all() bool {
 	}
 
 	status = test3_get_note_list(u, n.Key)
+	if !status {
+		return false
+	}
+
+	n, status = test4_get_note(u, n.Key)
+	fmt.Println(n)
+	if !status {
+		return false
+	}
+
+	nn, status := test5_update_note(u, n)
+	fmt.Println(nn)
+	if !status {
+		return false
+	}
+
+	n, status = test6_trash_note(u, n)
+	fmt.Println(n)
+	if !status {
+		return false
+	}
+
+	status = test7_delete_note(u, n)
 	if !status {
 		return false
 	}
@@ -86,9 +109,27 @@ func test4_get_note(u User, key string) (Note, bool) {
 }
 
 func test5_update_note(u User, n Note) (Note, bool) {
-    n.Content = "New test string"
-    nn := u.UpdateNote(&n)
-    nn, _ = u.GetNote(nn.Key, 0)
+	n.Content = "New test string"
+	nn := u.UpdateNote(&n)
+	nn, _ = u.GetNote(nn.Key, 0)
 
-    return nn, nn.Content == "New test string"
+	return nn, nn.Content == "New test string"
+}
+
+func test6_trash_note(u User, n Note) (Note, bool) {
+	tn := u.TrashNote(&n)
+
+	fmt.Println(tn.Content, tn.Deleted)
+	return tn, tn.Deleted == 1
+}
+
+func test7_delete_note(u User, n Note) bool {
+	ret, err := u.DeleteNote(&n)
+	if err != nil {
+		fmt.Println(err)
+		return false
+	}
+
+	return ret
+	// Add check that note list does not contain note?
 }
