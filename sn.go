@@ -166,8 +166,6 @@ func (user User) GetNote(key string, version int) (Note, error) {
 	d := json.NewDecoder(r.Body)
 	err = d.Decode(&no)
 
-	fmt.Println("debug")
-	fmt.Println(no)
 	if err != nil {
 		panic(err)
 	}
@@ -235,6 +233,42 @@ func parse_unix(ts string) time.Time {
 func make_unix(t time.Time) string {
 	ts := float64(t.UnixNano() / int64(time.Second))
 	return strconv.FormatFloat(ts, 'f', 6, 64)
+}
+
+func (user User) TrashNote(n *Note) Note {
+	n.Deleted = 1
+	return user.UpdateNote(n)
+}
+
+func (user User) DeleteNote(n *Note) (bool, error) {
+	tn := user.TrashNote(n)
+
+	if tn.Deleted != 1 {
+		return false, errors.New(fmt.Sprintf("Note not set as deleted: %d", tn.Deleted))
+	}
+
+	path := fmt.Sprintf("api2/data/%s", n.Key)
+
+	u := url.URL{Scheme: "https", Host: "simple-note.appspot.com", Path: path}
+	v := url.Values{}
+	v.Add("email", user.Email)
+	v.Add("auth", user.Auth)
+	u.RawQuery = v.Encode()
+
+	req, err := http.NewRequest("DELETE", u.String(), nil)
+
+	client := http.Client{Timeout: time.Second * 10}
+	r, err := client.Do(req)
+	if err != nil {
+		return false, err
+	}
+	defer r.Body.Close()
+
+	if r.StatusCode != 200 {
+		panic(r.Status)
+	}
+
+	return true, nil
 }
 
 /* Params fu - force update of note */
