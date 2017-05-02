@@ -13,7 +13,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
-	// "path/filepath"
+	"path/filepath"
 )
 
 type User struct {
@@ -360,4 +360,18 @@ func (ns Index) WriteNotes(path string, overwrite bool) error {
 	}
 
 	return nil
+}
+
+func visit(path string, f os.FileInfo, err error) error {
+	if !f.IsDir() {
+		return filepath.SkipDir
+	}
+
+	fmt.Printf("Visited: %s\n", path)
+	return nil
+}
+
+func ReadNotes(path string) {
+
+	filepath.Walk(path, visit)
 }
