@@ -368,6 +368,22 @@ func visit(path string, f os.FileInfo, err error) error {
 	}
 
 	fmt.Printf("Visited: %s\n", path)
+
+	if err := os.Chdir(path); err != nil {
+		panic(err)
+	}
+	defer os.Chdir("..")
+
+	b, err := ioutil.ReadFile("Key")
+	if err != nil {
+		fmt.Printf("Could not open Key in directory %s\n", path)
+		return nil
+		//return filepath.SkipDir
+		//return err
+	}
+
+	fmt.Println(string(b))
+
 	return nil
 }
 
