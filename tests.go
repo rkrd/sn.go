@@ -13,7 +13,7 @@ func Test_all(email string, pass string) bool {
 	}
 
 	n, status := test2_create_note(u)
-	fmt.Println(n, status)
+	n.PrintNote()
 	if !status {
 		return false
 	}
@@ -24,19 +24,19 @@ func Test_all(email string, pass string) bool {
 	}
 
 	n, status = test4_get_note(u, n.Key)
-	fmt.Println(n)
+	n.PrintNote()
 	if !status {
 		return false
 	}
 
 	nn, status := test5_update_note(u, n)
-	fmt.Println(nn)
+	nn.PrintNote()
 	if !status {
 		return false
 	}
 
 	n, status = test6_trash_note(u, n)
-	fmt.Println(n)
+	n.PrintNote()
 	if !status {
 		return false
 	}

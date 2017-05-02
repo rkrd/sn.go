@@ -53,6 +53,12 @@ type Index struct {
 	Mark  string
 }
 
+func (n Note) PrintNote() {
+	fmt.Println(parse_unix(n.Modifydate))
+	fmt.Println("Tags", n.Tags)
+	fmt.Println("Content", n.Content)
+}
+
 func GetAuth(email string, pass string) (User, error) {
 	//client := http.Client{Timeout: time.Second * 10}
 	var uri url.URL
