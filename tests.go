@@ -35,6 +35,11 @@ func Test_all(email string, pass string) bool {
 		return false
 	}
 
+	status = test8_read_write_note_fs(n)
+	if !status {
+		return false
+	}
+
 	n, status = test6_trash_note(u, n)
 	n.PrintNote()
 	if !status {
@@ -132,4 +137,20 @@ func test7_delete_note(u User, n Note) bool {
 
 	return ret
 	// Add check that note list does not contain note?
+}
+
+func test8_read_write_note_fs(n Note) bool {
+	n.WriteNoteFs("/tmp", false)
+	nn, err := ReadNoteFs("/tmp", n.Key)
+
+	if err != nil {
+		fmt.Println(err)
+		return false
+	}
+
+	fmt.Println("=================================== Test 8 ===================================")
+	fmt.Println(n.Content, nn.Content)
+	fmt.Println("=================================== Test 8 ===================================")
+
+	return n.Content == nn.Content
 }
