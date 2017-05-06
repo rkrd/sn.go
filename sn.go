@@ -10,11 +10,14 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
-	"path/filepath"
 )
+
+const CONTENT string = "text.txt"
+const KEY string = "Key"
 
 type User struct {
 	Email string
@@ -277,24 +280,40 @@ func (user User) DeleteNote(n *Note) (bool, error) {
 	return true, nil
 }
 
-/* Params fu - force update of note */
-func (n Note) update_note_fs(fu bool) error {
+/* Params
+ * path - Path to where notes are stored.
+ * fu - force update of note */
+func (n Note) WriteNoteFs(path string, fu bool) error {
 	new_file := false
-	if _, err := os.Stat("text.txt"); os.IsNotExist(err) {
-		new_file = true
-		f, oe := os.OpenFile("Key", os.O_RDWR|os.O_CREATE, 0755)
-		if oe != nil {
-			panic(oe)
-		}
 
-		if _, err := f.WriteString(n.Key); err != nil {
-			panic(err)
-		}
-		f.Close()
-
+	if err := os.Chdir(path); err != nil {
+		panic(err)
 	}
 
-	f, err := os.OpenFile("text.txt", os.O_RDWR|os.O_CREATE, 0755)
+	if _, err := os.Stat(n.Key); os.IsNotExist(err) {
+		err := os.Mkdir(n.Key, 0777)
+		if err != nil {
+			panic(err)
+		}
+
+		new_file = true
+	}
+
+	if err := os.Chdir(n.Key); err != nil {
+		panic(err)
+	}
+
+	f, oe := os.OpenFile(KEY, os.O_RDWR|os.O_CREATE, 0755)
+	if oe != nil {
+		panic(oe)
+	}
+
+	if _, err := f.WriteString(n.Key); err != nil {
+		panic(err)
+	}
+	f.Close()
+
+	f, err := os.OpenFile(CONTENT, os.O_RDWR|os.O_CREATE, 0755)
 	if err != nil {
 		panic(err) // change
 	}
@@ -315,11 +334,43 @@ func (n Note) update_note_fs(fu bool) error {
 	}
 	f.Close()
 
-	if terr := os.Chtimes("text.txt", time.Now(), mt); terr != nil {
+	if terr := os.Chtimes(CONTENT, time.Now(), mt); terr != nil {
 		panic(terr)
 	}
 
 	return nil
+}
+
+func ReadNoteFs(path string, key string) (Note, error) {
+	note := Note{Key: key}
+
+	if err := os.Chdir(path); err != nil {
+		panic(err)
+	}
+	if err := os.Chdir(key); err != nil {
+		panic(err)
+	}
+
+	f, err := os.Open(CONTENT)
+	if err != nil {
+		return note, err
+	}
+	defer f.Close()
+
+	cont, err := ioutil.ReadAll(f)
+	if err != nil {
+		return note, err
+	}
+	note.Content = string(cont)
+
+	stat, err := f.Stat()
+	if err != nil {
+		return note, err
+	}
+
+	note.Modifydate = stat.ModTime().String()
+
+	return note, nil
 }
 
 func (ns Index) WriteNotes(path string, overwrite bool) error {
@@ -334,29 +385,10 @@ func (ns Index) WriteNotes(path string, overwrite bool) error {
 		}
 	}
 
-	if err := os.Chdir(path); err != nil {
-		panic(err)
-	}
-
 	for _, v := range ns.Data {
-		if _, err := os.Stat(v.Key); os.IsNotExist(err) {
-			err := os.Mkdir(v.Key, 0777)
-			if err != nil {
-				panic(err)
-			}
-		} else if !overwrite {
-			continue
-		}
-
-		if err := os.Chdir(v.Key); err != nil {
+		if err := v.WriteNoteFs(path, overwrite); err != nil {
 			panic(err)
 		}
-
-		if err := v.update_note_fs(overwrite); err != nil {
-			panic(err)
-		}
-
-		os.Chdir(path)
 	}
 
 	return nil
@@ -374,7 +406,7 @@ func visit(path string, f os.FileInfo, err error) error {
 	}
 	defer os.Chdir("..")
 
-	b, err := ioutil.ReadFile("Key")
+	b, err := ioutil.ReadFile(KEY)
 	if err != nil {
 		fmt.Printf("Could not open Key in directory %s\n", path)
 		return nil
