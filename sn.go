@@ -10,7 +10,6 @@ import (
 	"net/http"
 	"net/url"
 	"os"
-	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -18,6 +17,7 @@ import (
 
 const CONTENT string = "text.txt"
 const KEY string = "Key"
+const MODIFYDATE = "Modifydate"
 
 type User struct {
 	Email string
@@ -47,6 +47,7 @@ type Note struct {
 	Syncnum    int      `json:"syncnum"`
 	Key        string   `json:"key"`
 	Minversion uint     `json:"minversion"`
+	modtime    time.Time
 }
 
 type Index struct {
@@ -60,6 +61,7 @@ func (n Note) PrintNote() {
 	fmt.Println(parse_unix(n.Modifydate))
 	fmt.Println("Tags", n.Tags)
 	fmt.Println("Content", n.Content)
+	fmt.Println("Key", n.Key)
 }
 
 func GetAuth(email string, pass string) (User, error) {
@@ -313,6 +315,16 @@ func (n Note) WriteNoteFs(path string, fu bool) error {
 	}
 	f.Close()
 
+	f, oe = os.OpenFile(MODIFYDATE, os.O_RDWR|os.O_CREATE, 0755)
+	if oe != nil {
+		panic(oe)
+	}
+
+	if _, err := f.WriteString(n.Modifydate); err != nil {
+		panic(err)
+	}
+	f.Close()
+
 	f, err := os.OpenFile(CONTENT, os.O_RDWR|os.O_CREATE, 0755)
 	if err != nil {
 		panic(err) // change
@@ -368,7 +380,14 @@ func ReadNoteFs(path string, key string) (Note, error) {
 		return note, err
 	}
 
-	note.Modifydate = stat.ModTime().String()
+	note.modtime = stat.ModTime()
+
+	modifydate, err := ioutil.ReadFile(MODIFYDATE)
+	if err != nil {
+		return note, err
+	}
+
+	note.Modifydate = string(modifydate)
 
 	return note, nil
 }
@@ -394,32 +413,58 @@ func (ns Index) WriteNotes(path string, overwrite bool) error {
 	return nil
 }
 
-func visit(path string, f os.FileInfo, err error) error {
-	if !f.IsDir() {
-		return filepath.SkipDir
-	}
-
-	fmt.Printf("Visited: %s\n", path)
-
-	if err := os.Chdir(path); err != nil {
+func (u User) SyncNote(path string, key string, prio_fs bool) {
+	fs_note, err := ReadNoteFs(path, key)
+	if err != nil {
 		panic(err)
 	}
-	defer os.Chdir("..")
 
-	b, err := ioutil.ReadFile(KEY)
+	server_note, err := u.GetNote(key, 0)
 	if err != nil {
-		fmt.Printf("Could not open Key in directory %s\n", path)
-		return nil
-		//return filepath.SkipDir
-		//return err
+		panic(err)
 	}
 
-	fmt.Println(string(b))
+	fn_time := parse_unix(fs_note.Modifydate)
+	sn_time := parse_unix(server_note.Modifydate)
 
-	return nil
+	if fs_note.modtime.After(fn_time) {
+		// Note on filesystem modified
+		if sn_time.After(fs_note.modtime) && !prio_fs {
+			err := server_note.WriteNoteFs(path, true)
+			if err != nil {
+				panic(err)
+			}
+		} else {
+			// Update note on server and update note on filesystem Modifydate
+			u.UpdateNote(&fs_note)
+			fs_note.Modifydate = make_unix(fs_note.modtime)
+			fs_note.WriteNoteFs(path, true)
+		}
+	} else {
+		if sn_time.After(fn_time) {
+			err := server_note.WriteNoteFs(path, true)
+			if err != nil {
+				panic(err)
+			}
+		}
+	}
 }
 
-func ReadNotes(path string) {
+/* prio_fs - If true if both file modtime and server note Modifydate is newer than
+ *           saved Modifydate over write note on server else over write on filesystem.
+ */
+func SyncNotes(path string, u User, prio_fs bool) {
 
-	filepath.Walk(path, visit)
+	note_dirs, err := ioutil.ReadDir(path)
+	if err != nil {
+		fmt.Println("Failed to read dir", path, err)
+		return
+	}
+
+	for _, d := range note_dirs {
+		u.SyncNote(path, d.Name(), prio_fs)
+	}
+
 }
+
+// Add function for updating/fetching specific note.

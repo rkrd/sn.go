@@ -2,6 +2,8 @@ package sn
 
 import (
 	"fmt"
+	"io/ioutil"
+	"path"
 	//"github/sn.go"
 )
 
@@ -9,45 +11,65 @@ func Test_all(email string, pass string) bool {
 	u, status := test1_get_auth(email, pass)
 	fmt.Println(u, status)
 	if !status {
+		fmt.Println("test1_get_auth FAIL")
 		return false
 	}
 
 	n, status := test2_create_note(u)
 	n.PrintNote()
 	if !status {
+		fmt.Println("test2_create_note FAIL")
 		return false
 	}
 
 	status = test3_get_note_list(u, n.Key)
 	if !status {
+		fmt.Println("test3_get_note_list FAIL")
 		return false
 	}
 
 	n, status = test4_get_note(u, n.Key)
 	n.PrintNote()
 	if !status {
+		fmt.Println("test4_get_note FAIL")
 		return false
 	}
 
 	nn, status := test5_update_note(u, n)
-	nn.PrintNote()
 	if !status {
+		fmt.Println("test5_update_note FAIL")
 		return false
 	}
+	nn.PrintNote()
 
 	status = test8_read_write_note_fs(n)
 	if !status {
+		fmt.Println("test8_read_write_note_fs FAIL")
 		return false
 	}
 
 	n, status = test6_trash_note(u, n)
 	n.PrintNote()
 	if !status {
+		fmt.Println("test6_trash_note FAIL")
 		return false
 	}
 
 	status = test7_delete_note(u, n)
 	if !status {
+		fmt.Println("test7_delete_note FAIL")
+		return false
+	}
+
+	note_list, status := test9_write_notes_fs(u)
+	if !status {
+		fmt.Println("test9_write_notes_fs FAIL")
+		return false
+	}
+
+	status = test10_sync_notes(u, note_list)
+	if !status {
+		fmt.Println("test10_sync_notes FAIL")
 		return false
 	}
 
@@ -139,6 +161,8 @@ func test7_delete_note(u User, n Note) bool {
 	// Add check that note list does not contain note?
 }
 
+/* Write a note to filesystem, read the note from filesystem and check that the contet is the same
+ * of both notes. */
 func test8_read_write_note_fs(n Note) bool {
 	n.WriteNoteFs("/tmp", false)
 	nn, err := ReadNoteFs("/tmp", n.Key)
@@ -153,4 +177,62 @@ func test8_read_write_note_fs(n Note) bool {
 	fmt.Println("=================================== Test 8 ===================================")
 
 	return n.Content == nn.Content
+}
+
+/* Fetch all notes and write to filesystem */
+func test9_write_notes_fs(u User) (Index, bool) {
+	nl, err := u.GetAllNotes()
+	if err != nil {
+		fmt.Println(err)
+		return Index{}, false
+	}
+
+	for i, v := range nl.Data {
+		n, err := u.GetNote(v.Key, 0)
+		if err != nil {
+			fmt.Println(err)
+			return Index{}, false
+		}
+
+		nl.Data[i] = n
+	}
+
+	err = nl.WriteNotes("/tmp/notes", true)
+	if err != nil {
+		fmt.Println(err)
+		return Index{}, false
+	}
+
+	return nl, true
+}
+
+func test10_sync_notes(u User, note_list Index) bool {
+	mod_note, err := ReadNoteFs("/tmp/notes", note_list.Data[1].Key)
+	if err != nil {
+		fmt.Println("---- fail 1 ----")
+		fmt.Println(err)
+		return false
+	}
+
+	err = ioutil.WriteFile(path.Join("/tmp/notes", mod_note.Key, "text.txt"), []byte("apa bepa cepa"), 0644)
+	if err != nil {
+		fmt.Println("---- fail 2 ----")
+		fmt.Println(err)
+		return false
+	}
+
+	SyncNotes("/tmp/notes", u, true)
+
+	fetch_note, err := u.GetNote(mod_note.Key, 0)
+	if err != nil {
+		fmt.Println("---- fail 3 ----")
+		fmt.Println(err)
+		return false
+	}
+
+	fmt.Println("test10 summary:")
+	mod_note.PrintNote()
+	fetch_note.PrintNote()
+	fmt.Println("====================")
+	return "apa bepa cepa" == fetch_note.Content
 }
