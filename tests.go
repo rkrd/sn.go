@@ -16,7 +16,6 @@ func Test_all(email string, pass string) bool {
 	}
 
 	n, status := test2_create_note(u)
-	n.PrintNote()
 	if !status {
 		fmt.Println("test2_create_note FAIL")
 		return false
@@ -29,18 +28,16 @@ func Test_all(email string, pass string) bool {
 	}
 
 	n, status = test4_get_note(u, n.Key)
-	n.PrintNote()
 	if !status {
 		fmt.Println("test4_get_note FAIL")
 		return false
 	}
 
-	nn, status := test5_update_note(u, n)
+	_, status = test5_update_note(u, n)
 	if !status {
 		fmt.Println("test5_update_note FAIL")
 		return false
 	}
-	nn.PrintNote()
 
 	status = test8_read_write_note_fs(n)
 	if !status {
@@ -49,7 +46,6 @@ func Test_all(email string, pass string) bool {
 	}
 
 	n, status = test6_trash_note(u, n)
-	n.PrintNote()
 	if !status {
 		fmt.Println("test6_trash_note FAIL")
 		return false
@@ -114,7 +110,6 @@ func test3_get_note_list(u User, key string) bool {
 
 	found := false
 	for _, v := range nl.Data {
-		fmt.Println(v)
 		if v.Key == key {
 			found = true
 			break
@@ -146,7 +141,6 @@ func test5_update_note(u User, n Note) (Note, bool) {
 func test6_trash_note(u User, n Note) (Note, bool) {
 	tn := u.TrashNote(&n)
 
-	fmt.Println(tn.Content, tn.Deleted)
 	return tn, tn.Deleted == 1
 }
 
@@ -171,10 +165,6 @@ func test8_read_write_note_fs(n Note) bool {
 		fmt.Println(err)
 		return false
 	}
-
-	fmt.Println("=================================== Test 8 ===================================")
-	fmt.Println(n.Content, nn.Content)
-	fmt.Println("=================================== Test 8 ===================================")
 
 	return n.Content == nn.Content
 }
@@ -207,7 +197,7 @@ func test9_write_notes_fs(u User) (Index, bool) {
 }
 
 func test10_sync_notes(u User, note_list Index) bool {
-	mod_note, err := ReadNoteFs("/tmp/notes", note_list.Data[1].Key)
+	mod_note, err := ReadNoteFs("/tmp/notes", note_list.Data[0].Key)
 	if err != nil {
 		fmt.Println("---- fail 1 ----")
 		fmt.Println(err)
@@ -235,4 +225,8 @@ func test10_sync_notes(u User, note_list Index) bool {
 	fetch_note.PrintNote()
 	fmt.Println("====================")
 	return "apa bepa cepa" == fetch_note.Content
+
+	/* Test when both server and local note have changed and server note shall overwrite.
+	 * Test when server and local have same content but dates changed.
+	 */
 }
