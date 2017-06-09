@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"reflect"
 	"strconv"
 	"strings"
 	"time"
@@ -18,7 +19,10 @@ import (
 const SIMPLENOTE_URL = "simple-note.appspot.com"
 const CONTENT string = "text.txt"
 const KEY string = "Key"
+const TAGS string = "Tags"
 const MODIFYDATE = "Modifydate"
+const FPERM os.FileMode = 0600
+const DPERM os.FileMode = 0700
 
 type User struct {
 	Email string
@@ -96,7 +100,7 @@ func getNotes(user User, mark string) (Index, error) {
 	}
 
 	if s.StatusCode != 200 {
-		return i, errors.New(fmt.Sprintf("GetNote returned: %d", s.StatusCode))
+		return i, errors.New(fmt.Sprintf("getNotes returned: %d", s.StatusCode))
 	}
 
 	d := json.NewDecoder(s.Body)
@@ -161,16 +165,13 @@ func (user User) GetNote(key string, version int) (Note, error) {
 	d := json.NewDecoder(r.Body)
 	err = d.Decode(&no)
 
-	if err != nil {
-		panic(err)
-	}
-
-	return no, nil
+	return no, err
 }
 
 /* Used to update an existing note or create a new note if Key of Note is
  * not set. */
-func (user User) UpdateNote(n *Note) Note {
+func (user User) UpdateNote(n *Note) (Note, error) {
+	var no Note
 	v := url.Values{}
 	v.Add("auth", user.Auth)
 	v.Add("email", user.Email)
@@ -189,22 +190,18 @@ func (user User) UpdateNote(n *Note) Note {
 
 	r, err := http.Post(u.String(), "application/json; charset=utf-8", b)
 	if err != nil {
-		panic(err)
+		return no, err
 	}
 	defer r.Body.Close()
 
 	if r.StatusCode != 200 {
-		panic(r.Status)
+		return no, errors.New(fmt.Sprintf("UpdateNote returned: %d on note: %s URL: %s", r.StatusCode, key, u.String()))
 	}
 
 	d := json.NewDecoder(r.Body)
-	var no Note
 	err = d.Decode(&no)
-	if err != nil {
-		panic(err)
-	}
 
-	return no
+	return no, err
 }
 
 func parse_unix(ts string) time.Time {
@@ -274,7 +271,7 @@ func (n Note) WriteNoteFs(path string, fu bool) error {
 	}
 
 	if _, err := os.Stat(n.Key); os.IsNotExist(err) {
-		err := os.Mkdir(n.Key, 0777)
+		err := os.Mkdir(n.Key, DPERM)
 		if err != nil {
 			panic(err)
 		}
@@ -286,7 +283,8 @@ func (n Note) WriteNoteFs(path string, fu bool) error {
 		panic(err)
 	}
 
-	f, oe := os.OpenFile(KEY, os.O_RDWR|os.O_CREATE, 0755)
+	// Key
+	f, oe := os.OpenFile(KEY, os.O_RDWR|os.O_CREATE, FPERM)
 	if oe != nil {
 		panic(oe)
 	}
@@ -296,7 +294,7 @@ func (n Note) WriteNoteFs(path string, fu bool) error {
 	}
 	f.Close()
 
-	f, oe = os.OpenFile(MODIFYDATE, os.O_RDWR|os.O_CREATE, 0755)
+	f, oe = os.OpenFile(MODIFYDATE, os.O_RDWR|os.O_CREATE, FPERM)
 	if oe != nil {
 		panic(oe)
 	}
@@ -306,11 +304,11 @@ func (n Note) WriteNoteFs(path string, fu bool) error {
 	}
 	f.Close()
 
-	f, err := os.OpenFile(CONTENT, os.O_RDWR|os.O_CREATE, 0755)
+	// Content
+	f, err := os.OpenFile(CONTENT, os.O_RDWR|os.O_CREATE, FPERM)
 	if err != nil {
 		panic(err) // change
 	}
-	defer f.Close()
 
 	fs, ferr := f.Stat()
 	if ferr != nil {
@@ -330,6 +328,20 @@ func (n Note) WriteNoteFs(path string, fu bool) error {
 	if terr := os.Chtimes(CONTENT, time.Now(), mt); terr != nil {
 		panic(terr)
 	}
+
+	// Tags
+	f, err = os.OpenFile(TAGS, os.O_RDWR|os.O_CREATE, FPERM)
+	if ferr != nil {
+		panic(ferr)
+	}
+
+	for _, v := range n.Tags {
+		if _, err := f.WriteString(v); err != nil {
+			panic(err)
+		}
+		f.WriteString("\n")
+	}
+	f.Close()
 
 	return nil
 }
@@ -375,7 +387,7 @@ func ReadNoteFs(path string, key string) (Note, error) {
 
 func (ns Index) WriteNotes(path string, overwrite bool) error {
 	if _, err := os.Stat(path); os.IsNotExist(err) {
-		e := os.Mkdir(path, 0777)
+		e := os.Mkdir(path, DPERM)
 		if e != nil {
 			panic(e)
 		}
@@ -405,17 +417,17 @@ func (u User) SyncNote(path string, key string, prio_fs bool) {
 		panic(err)
 	}
 
-	fn_time := parse_unix(ln.Modifydate)
+	ln_time := parse_unix(ln.Modifydate)
 	sn_time := parse_unix(sn.Modifydate)
 
-	if ln.modtime.After(fn_time) {
+	if ln.modtime.After(ln_time) {
 		if sn_time.After(ln.modtime) && !prio_fs {
 			err := sn.WriteNoteFs(path, true)
 			if err != nil {
 				panic(err)
 			}
 		} else {
-			if sn.Content != ln.Content {
+			if sn.Content != ln.Content || reflect.DeepEqual(sn, ln) {
 				n := u.UpdateNote(&ln)
 				if n.Key != ln.Key {
 					panic(err)
@@ -426,7 +438,7 @@ func (u User) SyncNote(path string, key string, prio_fs bool) {
 			ln.WriteNoteFs(path, true)
 		}
 	} else {
-		if sn_time.After(fn_time) {
+		if sn_time.After(ln_time) {
 			err := sn.WriteNoteFs(path, true)
 			if err != nil {
 				panic(err)
