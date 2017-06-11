@@ -18,9 +18,12 @@ import (
 
 const SIMPLENOTE_URL = "simple-note.appspot.com"
 const CONTENT string = "text.txt"
-const KEY string = "Key"
+const KEY string = ".Key"
 const TAGS string = "Tags"
-const MODIFYDATE = "Modifydate"
+/* MODIFYDATE is used to save the date note were last modified
+ on server. Used to determine if note have been modified on
+ both server and localy. */
+const MODIFYDATE = ".Modifydate"
 const FPERM os.FileMode = 0600
 const DPERM os.FileMode = 0700
 
@@ -195,7 +198,7 @@ func (user User) UpdateNote(n *Note) (Note, error) {
 	defer r.Body.Close()
 
 	if r.StatusCode != 200 {
-		return no, errors.New(fmt.Sprintf("UpdateNote returned: %d on note: %s URL: %s", r.StatusCode, key, u.String()))
+		return no, errors.New(fmt.Sprintf("UpdateNote returned: %d on URL: %s", r.StatusCode, u.String()))
 	}
 
 	d := json.NewDecoder(r.Body)
@@ -224,14 +227,17 @@ func make_unix(t time.Time) string {
 	return strconv.FormatFloat(ts, 'f', 6, 64)
 }
 
-func (user User) TrashNote(n *Note) Note {
+func (user User) TrashNote(n *Note) (Note, error) {
 	n.Deleted = 1
 	return user.UpdateNote(n)
 }
 
 func (user User) DeleteNote(n *Note) (bool, error) {
-	tn := user.TrashNote(n)
+	tn, err := user.TrashNote(n)
 
+	if err != nil {
+		return false, err
+	}
 	if tn.Deleted != 1 {
 		return false, errors.New(fmt.Sprintf("Note not set as deleted: %d", tn.Deleted))
 	}
@@ -428,8 +434,8 @@ func (u User) SyncNote(path string, key string, prio_fs bool) {
 			}
 		} else {
 			if sn.Content != ln.Content || reflect.DeepEqual(sn, ln) {
-				n := u.UpdateNote(&ln)
-				if n.Key != ln.Key {
+				n, err := u.UpdateNote(&ln)
+				if n.Key != ln.Key || err != nil {
 					panic(err)
 				}
 			}
