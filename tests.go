@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"path"
+	"time"
 	//"github/sn.go"
 )
 
@@ -92,7 +93,11 @@ func test2_create_note(u User) (Note, bool) {
 	n.Content = "Test string"
 	n.Tags = []string{"Test_tag"}
 
-	nn := u.UpdateNote(&n)
+	nn, err := u.UpdateNote(&n)
+
+	if err != nil {
+		return nn, false
+	}
 
 	return nn, nn.Key != "" || nn.Tags[0] == "Test_tag"
 }
@@ -132,14 +137,29 @@ func test4_get_note(u User, key string) (Note, bool) {
 
 func test5_update_note(u User, n Note) (Note, bool) {
 	n.Content = "New test string"
-	nn := u.UpdateNote(&n)
-	nn, _ = u.GetNote(nn.Key, 0)
+	nn, err := u.UpdateNote(&n)
+	if err != nil {
+		fmt.Println(err)
+		return nn, false
+	}
+
+	nn, err = u.GetNote(nn.Key, 0)
+	if err != nil {
+		fmt.Println(err)
+		return nn, false
+	}
+
 
 	return nn, nn.Content == "New test string"
 }
 
 func test6_trash_note(u User, n Note) (Note, bool) {
-	tn := u.TrashNote(&n)
+	tn, err := u.TrashNote(&n)
+
+	if err != nil {
+		fmt.Println(err)
+		return tn, false
+	}
 
 	return tn, tn.Deleted == 1
 }
@@ -196,7 +216,10 @@ func test9_write_notes_fs(u User) (Index, bool) {
 	return nl, true
 }
 
-func test10_sync_notes(u User, note_list Index) bool {
+func test10_helper(u User, note_list Index, local_prio bool) bool {
+	test_str1 := time.Now().Format("2006-01-02T15:04:05.999999-07:00")
+	test_str2 := time.Now().Format("T15:04:05.999999-07:00")
+
 	mod_note, err := ReadNoteFs("/tmp/notes", note_list.Data[0].Key)
 	if err != nil {
 		fmt.Println("---- fail 1 ----")
@@ -204,14 +227,22 @@ func test10_sync_notes(u User, note_list Index) bool {
 		return false
 	}
 
-	err = ioutil.WriteFile(path.Join("/tmp/notes", mod_note.Key, "text.txt"), []byte("apa bepa cepa"), 0644)
+	err = ioutil.WriteFile(path.Join("/tmp/notes", mod_note.Key, "text.txt"), []byte(test_str1), 0644)
 	if err != nil {
 		fmt.Println("---- fail 2 ----")
 		fmt.Println(err)
 		return false
 	}
 
-	SyncNotes("/tmp/notes", u, true)
+	mod_note.Content = test_str2
+	if _, err := u.UpdateNote(&mod_note); err != nil {
+		fmt.Println("test10 update note failed")
+		return false
+	}
+
+	// Simplenote does not seem to keen on multiple access to same note to fast.
+	time.Sleep(2000 * time.Millisecond)
+	SyncNotes("/tmp/notes", u, local_prio)
 
 	fetch_note, err := u.GetNote(mod_note.Key, 0)
 	if err != nil {
@@ -220,13 +251,30 @@ func test10_sync_notes(u User, note_list Index) bool {
 		return false
 	}
 
-	fmt.Println("test10 summary:")
-	mod_note.PrintNote()
-	fetch_note.PrintNote()
-	fmt.Println("====================")
-	return "apa bepa cepa" == fetch_note.Content
 
-	/* Test when both server and local note have changed and server note shall overwrite.
-	 * Test when server and local have same content but dates changed.
-	 */
+	if local_prio {
+		return test_str1 != fetch_note.Content
+	} else {
+		return test_str2 != fetch_note.Content
+	}
+}
+
+func test10_sync_notes(u User, note_list Index) bool {
+	/* Modify note both on server and locally, verify that it is the local change
+	that has effect that is propagated. */
+	if ret := test10_helper(u, note_list, true); !ret {
+		return false
+	}
+
+	// Simplenote does not seem to keen on multiple access to same note to fast.
+	time.Sleep(2000 * time.Millisecond)
+	/* Test when both server and local note have changed and server note shall overwrite. */
+	if ret := test10_helper(u, note_list, false); !ret {
+		return false
+	}
+
+	/* Test when server and local have same content but dates changed.
+	*/
+
+	return true
 }
