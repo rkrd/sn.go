@@ -7,6 +7,7 @@ import (
 	"os"
 	"reflect"
 	"time"
+	"bufio"
 )
 
 const CONTENT string = "text.txt"
@@ -18,6 +19,18 @@ const TAGS string = "Tags"
 const MODIFYDATE = ".Modifydate"
 const FPERM os.FileMode = 0600
 const DPERM os.FileMode = 0700
+
+func trunc_write(fn string, s string) error {
+	f, oerr := os.OpenFile(fn, os.O_RDWR|os.O_CREATE|os.O_TRUNC, FPERM)
+	if oerr != nil {
+		return oerr
+	}
+	defer f.Close()
+
+	_, err := f.WriteString(s)
+
+	return err
+}
 
 /* Params
  * path - Path to where notes are stored.
@@ -42,36 +55,19 @@ func (n Note) WriteNoteFs(path string, fu bool) error {
 		panic(err)
 	}
 
-	// Key
-	f, oe := os.OpenFile(KEY, os.O_RDWR|os.O_CREATE, FPERM)
-	if oe != nil {
-		panic(oe)
+	if err := trunc_write(KEY, n.Key); err != nil {
+		return err
 	}
 
-	if _, err := f.WriteString(n.Key); err != nil {
-		panic(err)
+	if err := trunc_write(MODIFYDATE, n.Modifydate); err != nil {
+		return err
 	}
-	f.Close()
-
-	f, oe = os.OpenFile(MODIFYDATE, os.O_RDWR|os.O_CREATE, FPERM)
-	if oe != nil {
-		panic(oe)
-	}
-
-	if _, err := f.WriteString(n.Modifydate); err != nil {
-		panic(err)
-	}
-	f.Close()
 
 	// Content
-	f, err := os.OpenFile(CONTENT, os.O_RDWR|os.O_CREATE, FPERM)
-	if err != nil {
-		panic(err) // change
-	}
 
-	fs, ferr := f.Stat()
+	fs, ferr := os.Stat(CONTENT)
 	if ferr != nil {
-		panic(ferr)
+		new_file = true
 	}
 
 	mt := parse_unix(n.Modifydate)
@@ -79,30 +75,27 @@ func (n Note) WriteNoteFs(path string, fu bool) error {
 		return errors.New("Filesystem note newer than current note.")
 	}
 
-	if _, err := f.WriteString(n.Content); err != nil {
-		panic(err)
+	if err := trunc_write(CONTENT, n.Content); err != nil {
+		return err
 	}
-	f.Close()
 
-	if terr := os.Chtimes(CONTENT, time.Now(), mt); terr != nil {
-		panic(terr)
+	if err := os.Chtimes(CONTENT, time.Now(), mt); err != nil {
+		return err
 	}
 
 	// Tags
-	f, err = os.OpenFile(TAGS, os.O_RDWR|os.O_CREATE, FPERM)
+	f, ferr := os.OpenFile(TAGS, os.O_RDWR|os.O_CREATE, FPERM)
 	if ferr != nil {
 		panic(ferr)
 	}
+	defer f.Close()
 
+	w := bufio.NewWriter(f)
 	for _, v := range n.Tags {
-		if _, err := f.WriteString(v); err != nil {
-			panic(err)
-		}
+		w.WriteString(v)
 		f.WriteString("\n")
 	}
-	f.Close()
-
-	return nil
+	return w.Flush()
 }
 
 
