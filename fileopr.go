@@ -1,22 +1,23 @@
 package sn
 
 import (
+	"bufio"
 	"errors"
 	"fmt"
 	"io/ioutil"
 	"os"
+	"path/filepath"
 	"reflect"
 	"time"
-	"bufio"
-	"path/filepath"
 )
 
 const CONTENT string = "text.txt"
 const KEY string = ".Key"
 const TAGS string = "Tags"
+
 /* MODIFYDATE is used to save the date note were last modified
- on server. Used to determine if note have been modified on
- both server and localy. */
+on server. Used to determine if note have been modified on
+both server and localy. */
 const MODIFYDATE = ".Modifydate"
 const FPERM os.FileMode = 0600
 const DPERM os.FileMode = 0700
@@ -99,7 +100,6 @@ func (n Note) WriteNoteFs(path string, fu bool) error {
 	return w.Flush()
 }
 
-
 func ReadNoteFs(path string, key string) (Note, error) {
 	note := Note{Key: key}
 
@@ -181,14 +181,14 @@ func (u User) SyncNote(path string, key string, prio_fs bool) {
 				panic(err)
 			}
 		} else {
-			if sn.Content != ln.Content || reflect.DeepEqual(sn, ln) {
+			ln.Modifydate = make_unix(ln.modtime)
+			if sn.Content != ln.Content || !reflect.DeepEqual(sn, ln) {
 				n, err := u.UpdateNote(&ln)
 				if n.Key != ln.Key || err != nil {
 					panic(err)
 				}
 			}
 
-			ln.Modifydate = make_unix(ln.modtime)
 			ln.WriteNoteFs(path, true)
 		}
 	} else {
@@ -213,9 +213,9 @@ func SyncNotes(path string, u User, prio_fs bool) {
 	}
 
 	/*
-	for _, d := range note_dirs {
-		u.SyncNote(path, d.Name(), prio_fs)
-	}
+		for _, d := range note_dirs {
+			u.SyncNote(path, d.Name(), prio_fs)
+		}
 	*/
 
 	var fidx Index
@@ -230,7 +230,7 @@ func SyncNotes(path string, u User, prio_fs bool) {
 
 	sidx, err := u.GetAllNotes()
 	if err != nil {
-		fmt.Println("SyncNotes",err)
+		fmt.Println("SyncNotes", err)
 		return
 	}
 
@@ -253,7 +253,7 @@ func SyncNotes(path string, u User, prio_fs bool) {
 				os.RemoveAll(filepath.Join(path, sn.Key))
 				continue
 			}
-			if fn.modtime != sn_time {
+			if fn.modtime.After(sn_time) {
 				fmt.Println("Syncing note: ", fn.Key)
 				u.SyncNote(path, fn.Key, prio_fs)
 			}
