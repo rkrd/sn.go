@@ -16,6 +16,8 @@ import (
 
 const SIMPLENOTE_URL = "simple-note.appspot.com"
 
+var Verbose = 0
+
 type User struct {
 	Email string
 	Auth  string
@@ -103,8 +105,10 @@ func getNotes(user User, mark string) (Index, error) {
 
 func (user User) GetAllNotes() (Index, error) {
 	var i Index
+	vprint("GetAllNotes ")
 
 	for {
+		vprint(".")
 		ii, err := getNotes(user, i.Mark)
 
 		if err != nil {
@@ -120,6 +124,7 @@ func (user User) GetAllNotes() (Index, error) {
 			break
 		}
 	}
+	vprint("\n")
 
 	return i, nil
 }
@@ -255,3 +260,12 @@ func (user User) DeleteNote(n *Note) (bool, error) {
 	return true, nil
 }
 
+func SetVerbose(level int) {
+	Verbose = level
+}
+
+func vprint(s string) {
+	if Verbose > 0 {
+		fmt.Print(s)
+	}
+}
