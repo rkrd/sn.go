@@ -211,8 +211,50 @@ func SyncNotes(path string, u User, prio_fs bool) {
 		return
 	}
 
+	/*
 	for _, d := range note_dirs {
 		u.SyncNote(path, d.Name(), prio_fs)
 	}
+	*/
 
+	var fidx Index
+	for _, d := range note_dirs {
+		n, err := ReadNoteFs(path, d.Name())
+		if err != nil {
+			fmt.Println(err)
+			return
+		}
+		fidx.Data = append(fidx.Data, n)
+	}
+
+	sidx, err := u.GetAllNotes()
+	if err != nil {
+		fmt.Println("SyncNotes",err)
+		return
+	}
+
+	for _, sn := range sidx.Data {
+		found := -1
+
+		for i, fn := range fidx.Data {
+			if fn.Key == sn.Key {
+				found = i
+				break
+			}
+		}
+
+		if found != -1 {
+			fn := fidx.Data[found]
+			if fn.Modifydate != sn.Modifydate {
+				u.SyncNote(path, fn.Key, prio_fs)
+			}
+		} else {
+			n, err := u.GetNote(sn.Key, 0)
+			if err != nil {
+				fmt.Println(err)
+				return
+			}
+			n.WriteNoteFs(path, false)
+		}
+	}
 }

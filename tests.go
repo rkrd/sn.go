@@ -267,7 +267,8 @@ func test10_sync_notes(u User, note_list Index) bool {
 	}
 
 	// Simplenote does not seem to keen on multiple access to same note to fast.
-	time.Sleep(2000 * time.Millisecond)
+	fmt.Println("Long delay, fetching note index cannot be done to often")
+	time.Sleep(20 * time.Second)
 	/* Test when both server and local note have changed and server note shall overwrite. */
 	if ret := test10_helper(u, note_list, false); !ret {
 		return false
