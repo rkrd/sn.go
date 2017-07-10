@@ -253,7 +253,7 @@ func SyncNotes(path string, u User, prio_fs bool) {
 				os.RemoveAll(filepath.Join(path, sn.Key))
 				continue
 			}
-			if fn.modtime.After(sn_time) {
+			if !fn.modtime.Equal(sn_time) {
 				fmt.Println("Syncing note: ", fn.Key)
 				u.SyncNote(path, fn.Key, prio_fs)
 			}
