@@ -245,10 +245,13 @@ func SyncNotes(path string, u User, prio_fs bool) {
 
 		if found != -1 {
 			fn := fidx.Data[found]
-			if fn.Modifydate != sn.Modifydate {
+			sn_time := parse_unix(sn.Modifydate)
+			if fn.modtime != sn_time {
+				fmt.Println("Syncing note: ", fn.Key)
 				u.SyncNote(path, fn.Key, prio_fs)
 			}
 		} else {
+			fmt.Println("Fetching new note ", sn.Key)
 			n, err := u.GetNote(sn.Key, 0)
 			if err != nil {
 				fmt.Println(err)
