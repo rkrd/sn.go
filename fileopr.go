@@ -8,6 +8,7 @@ import (
 	"reflect"
 	"time"
 	"bufio"
+	"path/filepath"
 )
 
 const CONTENT string = "text.txt"
@@ -246,11 +247,20 @@ func SyncNotes(path string, u User, prio_fs bool) {
 		if found != -1 {
 			fn := fidx.Data[found]
 			sn_time := parse_unix(sn.Modifydate)
+
+			if sn.Deleted != 0 {
+				fmt.Println("Deleting trashed note ", sn.Key)
+				os.RemoveAll(filepath.Join(path, sn.Key))
+				continue
+			}
 			if fn.modtime != sn_time {
 				fmt.Println("Syncing note: ", fn.Key)
 				u.SyncNote(path, fn.Key, prio_fs)
 			}
 		} else {
+			if sn.Deleted != 0 {
+				continue
+			}
 			fmt.Println("Fetching new note ", sn.Key)
 			n, err := u.GetNote(sn.Key, 0)
 			if err != nil {
