@@ -261,7 +261,7 @@ func SyncNotes(path string, u User, prio_fs bool) {
 			if sn.Deleted != 0 {
 				continue
 			}
-			fmt.Println("Fetching new note ", sn.Key)
+			fmt.Println("Fetching new note: ", sn.Key)
 			n, err := u.GetNote(sn.Key, 0)
 			if err != nil {
 				fmt.Println(err)
