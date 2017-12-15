@@ -22,7 +22,7 @@ const MODIFYDATE = ".Modifydate"
 const FPERM os.FileMode = 0600
 const DPERM os.FileMode = 0700
 
-func trunc_write(fn string, s string) error {
+func write_truncated(fn string, s string) error {
 	f, oerr := os.OpenFile(fn, os.O_RDWR|os.O_CREATE|os.O_TRUNC, FPERM)
 	if oerr != nil {
 		return oerr
@@ -36,8 +36,8 @@ func trunc_write(fn string, s string) error {
 
 /* Params
  * path - Path to where notes are stored.
- * fu - force update of note */
-func (n Note) WriteNoteFs(path string, fu bool) error {
+ * force_update - force update of note */
+func (n Note) WriteNoteFs(path string, force_update bool) error {
 	new_file := false
 
 	if err := os.Chdir(path); err != nil {
@@ -57,11 +57,11 @@ func (n Note) WriteNoteFs(path string, fu bool) error {
 		panic(err)
 	}
 
-	if err := trunc_write(KEY, n.Key); err != nil {
+	if err := write_truncated(KEY, n.Key); err != nil {
 		return err
 	}
 
-	if err := trunc_write(MODIFYDATE, n.Modifydate); err != nil {
+	if err := write_truncated(MODIFYDATE, n.Modifydate); err != nil {
 		return err
 	}
 
@@ -72,12 +72,12 @@ func (n Note) WriteNoteFs(path string, fu bool) error {
 		new_file = true
 	}
 
-	mt := parse_unix(n.Modifydate)
-	if !new_file && fs.ModTime().After(mt) && !fu {
+	mt := unix_timestamp_parse(n.Modifydate)
+	if !new_file && fs.ModTime().After(mt) && !force_update {
 		return errors.New("Filesystem note newer than current note.")
 	}
 
-	if err := trunc_write(CONTENT, n.Content); err != nil {
+	if err := write_truncated(CONTENT, n.Content); err != nil {
 		return err
 	}
 
@@ -171,8 +171,8 @@ func (u User) SyncNote(path string, key string, prio_fs bool) {
 		panic(err)
 	}
 
-	ln_time := parse_unix(ln.Modifydate)
-	sn_time := parse_unix(sn.Modifydate)
+	ln_time := unix_timestamp_parse(ln.Modifydate)
+	sn_time := unix_timestamp_parse(sn.Modifydate)
 
 	if ln.modtime.After(ln_time) {
 		if sn_time.After(ln.modtime) && !prio_fs {
@@ -181,7 +181,7 @@ func (u User) SyncNote(path string, key string, prio_fs bool) {
 				panic(err)
 			}
 		} else {
-			ln.Modifydate = make_unix(ln.modtime)
+			ln.Modifydate = unix_timestamp_make(ln.modtime)
 			if sn.Content != ln.Content || !reflect.DeepEqual(sn, ln) {
 				n, err := u.UpdateNote(&ln)
 				if n.Key != ln.Key || err != nil {
@@ -202,7 +202,7 @@ func (u User) SyncNote(path string, key string, prio_fs bool) {
 }
 
 /* prio_fs - If true if both file modtime and server note Modifydate is newer than
- *           saved Modifydate over write note on server else over write on filesystem.
+ *           saved Modifydate overwrite note on server else over write on filesystem.
  */
 func SyncNotes(path string, u User, prio_fs bool) {
 
@@ -218,51 +218,44 @@ func SyncNotes(path string, u User, prio_fs bool) {
 		}
 	*/
 
-	var fidx Index
+	map_local := make(map[string]Note)
 	for _, d := range note_dirs {
-		n, err := ReadNoteFs(path, d.Name())
+		note, err := ReadNoteFs(path, d.Name())
 		if err != nil {
 			fmt.Println(err)
 			return
 		}
-		fidx.Data = append(fidx.Data, n)
+
+		map_local[note.Key] = note
 	}
 
-	sidx, err := u.GetAllNotes()
+	index_server, err := u.GetAllNotes()
 	if err != nil {
 		fmt.Println("SyncNotes", err)
 		return
 	}
 
-	for _, sn := range sidx.Data {
-		found := -1
+	for _, note_server := range index_server.Data {
+		note_local := map_local[note_server.Key]
 
-		for i, fn := range fidx.Data {
-			if fn.Key == sn.Key {
-				found = i
-				break
-			}
-		}
+		if note_local.Key != "" {
+			ts_note_server := unix_timestamp_parse(note_server.Modifydate)
 
-		if found != -1 {
-			fn := fidx.Data[found]
-			sn_time := parse_unix(sn.Modifydate)
-
-			if sn.Deleted != 0 {
-				fmt.Println("Deleting trashed note ", sn.Key)
-				os.RemoveAll(filepath.Join(path, sn.Key))
+			if note_server.Deleted != 0 {
+				fmt.Println("Deleting trashed note ", note_server.Key)
+				os.RemoveAll(filepath.Join(path, note_server.Key))
 				continue
 			}
-			if !fn.modtime.Equal(sn_time) {
-				fmt.Println("Syncing note: ", fn.Key)
-				u.SyncNote(path, fn.Key, prio_fs)
+			if !note_local.modtime.Equal(ts_note_server) {
+				fmt.Println("Syncing note: ", note_local.Key)
+				u.SyncNote(path, note_local.Key, prio_fs)
 			}
 		} else {
-			if sn.Deleted != 0 {
+			if note_server.Deleted != 0 {
 				continue
 			}
-			fmt.Println("Fetching new note: ", sn.Key)
-			n, err := u.GetNote(sn.Key, 0)
+			fmt.Println("Fetching new note: ", note_server.Key)
+			n, err := u.GetNote(note_server.Key, 0)
 			if err != nil {
 				fmt.Println(err)
 				return

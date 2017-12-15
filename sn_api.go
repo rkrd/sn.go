@@ -45,7 +45,7 @@ type Index struct {
 }
 
 func (n Note) PrintNote() {
-	fmt.Println(parse_unix(n.Modifydate))
+	fmt.Println(unix_timestamp_parse(n.Modifydate))
 	fmt.Println("Tags", n.Tags)
 	fmt.Println("Content", n.Content)
 	fmt.Println("Key", n.Key)
@@ -105,10 +105,10 @@ func getNotes(user User, mark string) (Index, error) {
 
 func (user User) GetAllNotes() (Index, error) {
 	var i Index
-	vprint("GetAllNotes ")
+	sn_debug_print("GetAllNotes ")
 
 	for {
-		vprint(".")
+		sn_debug_print(".")
 		ii, err := getNotes(user, i.Mark)
 
 		if err != nil {
@@ -124,7 +124,7 @@ func (user User) GetAllNotes() (Index, error) {
 			break
 		}
 	}
-	vprint("\n")
+	sn_debug_print("\n")
 
 	return i, nil
 }
@@ -201,7 +201,7 @@ func (user User) UpdateNote(n *Note) (Note, error) {
 	return no, err
 }
 
-func parse_unix(ts string) time.Time {
+func unix_timestamp_parse(ts string) time.Time {
 	i := strings.IndexRune(ts, '.')
 	sec, err := strconv.ParseInt(ts[:i], 10, 64)
 	if err != nil {
@@ -216,7 +216,7 @@ func parse_unix(ts string) time.Time {
 	return tm
 }
 
-func make_unix(t time.Time) string {
+func unix_timestamp_make(t time.Time) string {
 	ts := float64(t.UnixNano() / int64(time.Second))
 	return strconv.FormatFloat(ts, 'f', 6, 64)
 }
@@ -264,7 +264,7 @@ func SetVerbose(level int) {
 	Verbose = level
 }
 
-func vprint(s string) {
+func sn_debug_print(s string) {
 	if Verbose > 0 {
 		fmt.Print(s)
 	}
