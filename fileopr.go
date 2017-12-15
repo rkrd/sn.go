@@ -208,8 +208,8 @@ func SyncNotes(path string, u User, prio_fs bool) {
 
 	note_dirs, err := ioutil.ReadDir(path)
 	if err != nil {
-		fmt.Println("Failed to read dir", path, err)
-		return
+		fmt.Println(err)
+		panic("Failed to read dir " + path)
 	}
 
 	/*
@@ -222,8 +222,7 @@ func SyncNotes(path string, u User, prio_fs bool) {
 	for _, d := range note_dirs {
 		note, err := ReadNoteFs(path, d.Name())
 		if err != nil {
-			fmt.Println(err)
-			return
+			panic(err)
 		}
 
 		map_local[note.Key] = note
@@ -232,7 +231,7 @@ func SyncNotes(path string, u User, prio_fs bool) {
 	index_server, err := u.GetAllNotes()
 	if err != nil {
 		fmt.Println("SyncNotes", err)
-		return
+		panic("SyncNotes failed GetAllNotes")
 	}
 
 	for _, note_server := range index_server.Data {
